@@ -38,3 +38,41 @@ app.post("/consumerdirect/get-credit-score", async (req, res) => {
     });
   }
 });
+// Create customer
+app.post("/consumerdirect/create-customer", async (req, res) => {
+  const authHeader = req.headers["x-internal-secret"];
+  if (authHeader !== INTERNAL_SECRET) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  try {
+    const payload = req.body; // should match ConsumerDirect's customer creation schema
+
+    // 1) Get JWT token
+    const accessToken = await getAccessToken();
+
+    // 2) Call ConsumerDirect create-customer endpoint
+    const response = await axios.post(
+      `${CD_BASE_URL}/v1/customers`,
+      payload,
+      {
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+      }
+    );
+
+    res.status(response.status).json(response.data);
+  } catch (error) {
+    console.error(
+      "ConsumerDirect create-customer error:",
+      error.response?.data || error.message
+    );
+    res.status(error.response?.status || 500).json({
+      error: "ConsumerDirect create-customer failed",
+      details: error.response?.data || { message: error.message },
+    });
+  }
+});
