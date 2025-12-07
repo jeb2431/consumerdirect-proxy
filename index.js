@@ -4,23 +4,16 @@ import axios from "axios";
 const app = express();
 app.use(express.json());
 
-const FIXIE_URL = process.env.FIXIE_URL;
 const CD_BASE_URL = process.env.CD_BASE_URL;
 const CD_PARTNER_ID = process.env.CD_PARTNER_ID;
 const CD_API_KEY = process.env.CD_API_KEY;
 const INTERNAL_SHARED_SECRET = process.env.INTERNAL_SHARED_SECRET;
 const PORT = process.env.PORT || 3000;
 
-// Parse Fixie URL
-const fixieUrl = new URL(FIXIE_URL);
-const proxyConfig = {
-  host: fixieUrl.hostname,
-  port: parseInt(fixieUrl.port),
-  auth: {
-    username: fixieUrl.username,
-    password: fixieUrl.password
-  }
-};
+if (!CD_BASE_URL || !INTERNAL_SHARED_SECRET) {
+  console.error("Missing required environment variables");
+  process.exit(1);
+}
 
 // Auth middleware
 app.use((req, res, next) => {
@@ -33,7 +26,7 @@ app.use((req, res, next) => {
 
 // Health check
 app.get("/health", (req, res) => {
-  res.json({ status: "ok", proxy: "fixie" });
+  res.json({ status: "ok", proxy: "env_HTTP(S)_PROXY" });
 });
 
 // Get credit score
@@ -45,7 +38,7 @@ app.post("/consumerdirect/get-credit-score", async (req, res) => {
       `${CD_BASE_URL}/getcreditscore`,
       payload,
       {
-        proxy: proxyConfig,
+        // axios will use HTTP_PROXY / HTTPS_PROXY env vars automatically
         headers: {
           "Content-Type": "application/json",
           "X-Partner-Id": CD_PARTNER_ID,
@@ -59,7 +52,7 @@ app.post("/consumerdirect/get-credit-score", async (req, res) => {
     console.error("ConsumerDirect error:", err.response?.data || err.message);
     res.status(err.response?.status || 500).json({
       error: "ConsumerDirect request failed",
-      details: err.response?.data || err.message
+      details: err.response?.data || err.message,
     });
   }
 });
