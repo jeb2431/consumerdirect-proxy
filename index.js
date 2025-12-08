@@ -10,7 +10,7 @@ const PORT = process.env.PORT || 3000;
 const INTERNAL_SECRET = process.env.INTERNAL_SHARED_SECRET;
 
 // ConsumerDirect config
-const CD_BASE_URL = process.env.CD_BASE_URL || "https://api.consumerdirect.io";
+const CD_BASE_URL = process.env.CD_BASE_URL || "https://papi.consumerdirect.io";
 const CD_CLIENT_ID = process.env.CD_CLIENT_ID;
 const CD_CLIENT_SECRET = process.env.CD_CLIENT_SECRET;
 
@@ -107,7 +107,7 @@ app.post("/consumerdirect/create-customer", async (req, res) => {
 
     // 2) Call ConsumerDirect create-customer endpoint
     const response = await axios.post(
-      `${CD_BASE_URL}/v1/customers`,
+      `${CD_BASE_URL}/v1/privacy/customers`,
       payload,
       {
         headers: {
