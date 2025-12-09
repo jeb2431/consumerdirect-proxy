@@ -6,7 +6,7 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
 
-// Internal shared secret used to authorize calls from your backend
+// Internal shared secret used to authorize calls from your backend (Base44)
 const INTERNAL_SECRET = process.env.INTERNAL_SHARED_SECRET;
 
 // ConsumerDirect config
@@ -24,7 +24,7 @@ if (!CD_CLIENT_ID || !CD_CLIENT_SECRET) {
   process.exit(1);
 }
 
-// Health check (requires internal secret)
+// Health check (requires internal secret so it isn't public)
 app.get("/health", (req, res) => {
   const authHeader = req.headers["x-internal-secret"];
   if (authHeader !== INTERNAL_SECRET) {
@@ -51,7 +51,10 @@ async function getAccessToken() {
   return authResponse.data.access_token;
 }
 
-// Get credit score for a specific customerToken
+// ---------------------------------------------------------------------------
+// 1) Get credit score for a specific customerToken
+//    Proxies to: GET /v1/customers/{customerToken}/credit-scores
+// ---------------------------------------------------------------------------
 app.post("/consumerdirect/get-credit-score", async (req, res) => {
   const authHeader = req.headers["x-internal-secret"];
   if (authHeader !== INTERNAL_SECRET) {
@@ -65,10 +68,8 @@ app.post("/consumerdirect/get-credit-score", async (req, res) => {
       return res.status(400).json({ error: "customerToken is required" });
     }
 
-    // 1) Get JWT token
     const accessToken = await getAccessToken();
 
-    // 2) Call ConsumerDirect API with JWT
     const url = `${CD_BASE_URL}/v1/customers/${customerToken}/credit-scores`;
 
     console.log("CD get-credit-score outbound request:", { url });
@@ -80,7 +81,7 @@ app.post("/consumerdirect/get-credit-score", async (req, res) => {
       },
     });
 
-    res.json(response.data);
+    res.status(response.status).json(response.data);
   } catch (error) {
     console.error(
       "ConsumerDirect get-credit-score error:",
@@ -93,7 +94,11 @@ app.post("/consumerdirect/get-credit-score", async (req, res) => {
   }
 });
 
-// NEW: Get customers (proxy for PAPI GET /v1/customers)
+// ---------------------------------------------------------------------------
+// 2) Get customers (search/list existing customers under your PID)
+//    Proxies to: GET /v1/customers with query params
+//    Body from Base44 (JSON) becomes query string: { email, lastName, pid, ... }
+// ---------------------------------------------------------------------------
 app.post("/consumerdirect/get-customers", async (req, res) => {
   const authHeader = req.headers["x-internal-secret"];
   if (authHeader !== INTERNAL_SECRET) {
@@ -103,7 +108,6 @@ app.post("/consumerdirect/get-customers", async (req, res) => {
   try {
     const filters = req.body || {};
 
-    // Build query string from whatever filters we receive
     const params = new URLSearchParams();
     for (const [key, value] of Object.entries(filters)) {
       if (value !== undefined && value !== null && value !== "") {
@@ -121,10 +125,8 @@ app.post("/consumerdirect/get-customers", async (req, res) => {
       params: filters,
     });
 
-    // 1) Get JWT token
     const accessToken = await getAccessToken();
 
-    // 2) Call ConsumerDirect GET /v1/customers with query params
     const response = await axios.get(url, {
       headers: {
         Accept: "application/json",
@@ -145,8 +147,66 @@ app.post("/consumerdirect/get-customers", async (req, res) => {
   }
 });
 
-// DEPRECATED: create-customer via /privacy/customers (no longer supported for credit)
-// We keep this route but return 400 so no one accidentally calls the wrong business unit.
+// ---------------------------------------------------------------------------
+// 3) Login-As (agent login-as customer)
+//    This is a shell following the Login-As docs. The exact URL/payload can be
+//    adjusted by Bass44 to match the official spec, but this gives them a
+//    working endpoint on the proxy.
+//    Example assumption: POST /v1/customers/{customerToken}/login-as
+// ---------------------------------------------------------------------------
+app.post("/consumerdirect/login-as", async (req, res) => {
+  const authHeader = req.headers["x-internal-secret"];
+  if (authHeader !== INTERNAL_SECRET) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  try {
+    const body = req.body || {};
+    const { customerToken } = body;
+
+    if (!customerToken) {
+      return res
+        .status(400)
+        .json({ error: "customerToken is required for login-as" });
+    }
+
+    const accessToken = await getAccessToken();
+
+    // NOTE: If ConsumerDirect's docs say a different path or require specific
+    // body fields (e.g., pid, returnUrl, etc.), Bass44 can update this URL + body.
+    const url = `${CD_BASE_URL}/v1/customers/${customerToken}/login-as`;
+
+    console.log("CD login-as outbound request:", {
+      url,
+      body,
+    });
+
+    const response = await axios.post(url, body, {
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+
+    res.status(response.status).json(response.data);
+  } catch (error) {
+    console.error(
+      "ConsumerDirect login-as error:",
+      error.response?.data || error.message
+    );
+    res.status(error.response?.status || 500).json({
+      error: "ConsumerDirect login-as failed",
+      details: error.response?.data || { message: error.message },
+    });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// 4) DEPRECATED: create-customer via /privacy/customers
+//    Not supported for your credit monitoring product. We keep this route
+//    but force it to fail clearly so nothing calls the wrong business unit.
+// ---------------------------------------------------------------------------
 app.post("/consumerdirect/create-customer", async (req, res) => {
   const authHeader = req.headers["x-internal-secret"];
   if (authHeader !== INTERNAL_SECRET) {
@@ -156,7 +216,7 @@ app.post("/consumerdirect/create-customer", async (req, res) => {
   return res.status(400).json({
     error: "Not supported",
     details:
-      "/v1/privacy/customers is not supported for our credit monitoring product. Use hosted signup plus /v1/customers and Login-As instead.",
+      "/v1/privacy/customers is not supported for this credit monitoring integration. Use hosted signup plus /v1/customers and Login-As instead.",
   });
 });
 
