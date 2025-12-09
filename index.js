@@ -6,7 +6,7 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
 
-// Internal shared secret used to authorize calls from Base44
+// Internal shared secret used to authorize calls from your backend
 const INTERNAL_SECRET = process.env.INTERNAL_SHARED_SECRET;
 
 // ConsumerDirect config
@@ -101,6 +101,12 @@ app.post("/consumerdirect/create-customer", async (req, res) => {
 
   try {
     const payload = req.body; // should match ConsumerDirect's customer creation schema
+
+    // NEW: log exactly what we send to ConsumerDirect
+    console.log("CD create-customer outbound request:", {
+      url: `${CD_BASE_URL}/v1/privacy/customers`,
+      payload,
+    });
 
     // 1) Get JWT token
     const accessToken = await getAccessToken();
