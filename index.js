@@ -51,7 +51,7 @@ async function getAccessToken() {
   return authResponse.data.access_token;
 }
 
-// Get credit score
+// Get credit score for a specific customerToken
 app.post("/consumerdirect/get-credit-score", async (req, res) => {
   const authHeader = req.headers["x-internal-secret"];
   if (authHeader !== INTERNAL_SECRET) {
@@ -69,72 +69,95 @@ app.post("/consumerdirect/get-credit-score", async (req, res) => {
     const accessToken = await getAccessToken();
 
     // 2) Call ConsumerDirect API with JWT
-    const response = await axios.get(
-      `${CD_BASE_URL}/v1/customers/${customerToken}/credit-scores`,
-      {
-        headers: {
-          Accept: "application/json",
-          Authorization: `Bearer ${accessToken}`,
-        },
-      }
-    );
+    const url = `${CD_BASE_URL}/v1/customers/${customerToken}/credit-scores`;
+
+    console.log("CD get-credit-score outbound request:", { url });
+
+    const response = await axios.get(url, {
+      headers: {
+        Accept: "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
 
     res.json(response.data);
   } catch (error) {
     console.error(
-      "ConsumerDirect API Error:",
+      "ConsumerDirect get-credit-score error:",
       error.response?.data || error.message
     );
-    res.status(500).json({
-      error: "ConsumerDirect request failed",
+    res.status(error.response?.status || 500).json({
+      error: "ConsumerDirect get-credit-score failed",
       details: error.response?.data || { message: error.message },
     });
   }
 });
 
-// Create customer
-app.post("/consumerdirect/create-customer", async (req, res) => {
+// NEW: Get customers (proxy for PAPI GET /v1/customers)
+app.post("/consumerdirect/get-customers", async (req, res) => {
   const authHeader = req.headers["x-internal-secret"];
   if (authHeader !== INTERNAL_SECRET) {
     return res.status(401).json({ error: "Unauthorized" });
   }
 
   try {
-    const payload = req.body; // should match ConsumerDirect's customer creation schema
+    const filters = req.body || {};
 
-    // NEW: log exactly what we send to ConsumerDirect
-    console.log("CD create-customer outbound request:", {
-      url: `${CD_BASE_URL}/v1/privacy/customers`,
-      payload,
+    // Build query string from whatever filters we receive
+    const params = new URLSearchParams();
+    for (const [key, value] of Object.entries(filters)) {
+      if (value !== undefined && value !== null && value !== "") {
+        params.append(key, String(value));
+      }
+    }
+
+    const url =
+      params.toString().length > 0
+        ? `${CD_BASE_URL}/v1/customers?${params.toString()}`
+        : `${CD_BASE_URL}/v1/customers`;
+
+    console.log("CD get-customers outbound request:", {
+      url,
+      params: filters,
     });
 
     // 1) Get JWT token
     const accessToken = await getAccessToken();
 
-    // 2) Call ConsumerDirect create-customer endpoint
-    const response = await axios.post(
-      `${CD_BASE_URL}/v1/privacy/customers`,
-      payload,
-      {
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-          Authorization: `Bearer ${accessToken}`,
-        },
-      }
-    );
+    // 2) Call ConsumerDirect GET /v1/customers with query params
+    const response = await axios.get(url, {
+      headers: {
+        Accept: "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
 
     res.status(response.status).json(response.data);
   } catch (error) {
     console.error(
-      "ConsumerDirect create-customer error:",
+      "ConsumerDirect get-customers error:",
       error.response?.data || error.message
     );
     res.status(error.response?.status || 500).json({
-      error: "ConsumerDirect create-customer failed",
+      error: "ConsumerDirect get-customers failed",
       details: error.response?.data || { message: error.message },
     });
   }
+});
+
+// DEPRECATED: create-customer via /privacy/customers (no longer supported for credit)
+// We keep this route but return 400 so no one accidentally calls the wrong business unit.
+app.post("/consumerdirect/create-customer", async (req, res) => {
+  const authHeader = req.headers["x-internal-secret"];
+  if (authHeader !== INTERNAL_SECRET) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  return res.status(400).json({
+    error: "Not supported",
+    details:
+      "/v1/privacy/customers is not supported for our credit monitoring product. Use hosted signup plus /v1/customers and Login-As instead.",
+  });
 });
 
 app.listen(PORT, () => {
