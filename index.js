@@ -149,10 +149,9 @@ app.post("/consumerdirect/get-customers", async (req, res) => {
 
 // ---------------------------------------------------------------------------
 // 3) Login-As (agent login-as customer)
-//    This is a shell following the Login-As docs. The exact URL/payload can be
-//    adjusted by Bass44 to match the official spec, but this gives them a
-//    working endpoint on the proxy.
-//    Example assumption: POST /v1/customers/{customerToken}/login-as
+//    Step One from docs: POST /v1/customers/{customerToken}/otcs/login-as
+//    Returns a one-time-code (OTC) which the frontend will exchange via
+//    https://<website-domain>/auth?code=<one-time-code>
 // ---------------------------------------------------------------------------
 app.post("/consumerdirect/login-as", async (req, res) => {
   const authHeader = req.headers["x-internal-secret"];
@@ -162,7 +161,7 @@ app.post("/consumerdirect/login-as", async (req, res) => {
 
   try {
     const body = req.body || {};
-    const { customerToken } = body;
+    const { customerToken, agentId } = body;
 
     if (!customerToken) {
       return res
@@ -170,25 +169,39 @@ app.post("/consumerdirect/login-as", async (req, res) => {
         .json({ error: "customerToken is required for login-as" });
     }
 
+    if (!agentId) {
+      return res
+        .status(400)
+        .json({ error: "agentId is required for login-as" });
+    }
+
     const accessToken = await getAccessToken();
 
-    // NOTE: If ConsumerDirect's docs say a different path or require specific
-    // body fields (e.g., pid, returnUrl, etc.), Bass44 can update this URL + body.
-    const url = `${CD_BASE_URL}/v1/customers/${customerToken}/login-as`;
+    const url = `${CD_BASE_URL}/v1/customers/${customerToken}/otcs/login-as`;
 
     console.log("CD login-as outbound request:", {
       url,
-      body,
+      body: { agentId },
     });
 
-    const response = await axios.post(url, body, {
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-        Authorization: `Bearer ${accessToken}`,
-      },
-    });
+    const response = await axios.post(
+      url,
+      { agentId },
+      {
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+      }
+    );
 
+    // Response shape should be like:
+    // {
+    //   "code": "pola-....",
+    //   "expirationDateTime": "...",
+    //   "type": "LOGIN_AS"
+    // }
     res.status(response.status).json(response.data);
   } catch (error) {
     console.error(
