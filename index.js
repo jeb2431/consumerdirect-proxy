@@ -1,7 +1,7 @@
 /**
  * consumerdirect-proxy
  * index.js
- * FULL REPLACEMENT FILE (CLEAN)
+ * FULL REPLACEMENT FILE (ESM SAFE)
  */
 
 // ------------------------------
@@ -69,9 +69,10 @@ if (!hasClientId || !hasClientSecret || !hasBaseUrl || !hasInternalSecret) {
 }
 
 // ------------------------------
-// START PLACEHOLDER SERVER (Keeps Render happy)
+// START PLACEHOLDER SERVER (ESM)
 // ------------------------------
-const http = require("http");
+import http from "http";
+
 const PORT = process.env.PORT || 10000;
 
 http
@@ -94,7 +95,7 @@ http
 // ------------------------------
 // EXPORT (FOR FUTURE USE)
 // ------------------------------
-module.exports = {
+export {
   clientId,
   clientSecret,
   baseUrl,
