@@ -1,7 +1,7 @@
 /**
  * consumerdirect-proxy
  * index.js
- * FULL REPLACEMENT FILE
+ * FULL REPLACEMENT FILE (CLEAN)
  */
 
 // ------------------------------
@@ -36,11 +36,11 @@ const clientSecret =
 const baseUrl =
   process.env.CD_BASE_URL ||
   process.env.CONSUMER_DIRECT_BASE_URL ||
-  'https://papi.consumerdirect.io';
+  "https://papi.consumerdirect.io";
 
 const tokenUrl =
   process.env.CONSUMER_DIRECT_TOKEN_URL ||
-  'https://auth.consumerdirect.io/oauth2/token';
+  "https://auth.consumerdirect.io/oauth2/token";
 
 const targetEntity =
   process.env.CONSUMER_DIRECT_TARGET_ENTITY ||
@@ -69,25 +69,27 @@ if (!hasClientId || !hasClientSecret || !hasBaseUrl || !hasInternalSecret) {
 }
 
 // ------------------------------
-// START PLACEHOLDER SERVER
-// (Keeps Render happy)
+// START PLACEHOLDER SERVER (Keeps Render happy)
 // ------------------------------
 const http = require("http");
-
 const PORT = process.env.PORT || 10000;
 
-http.createServer((req, res) => {
-  res.writeHead(200, { "Content-Type": "application/json" });
-  res.end(JSON.stringify({
-    status: "ok",
-    hasClientId,
-    hasClientSecret,
-    hasBaseUrl,
-    hasInternalSecret,
-  }));
-}).listen(PORT, () => {
-  console.log(`✅ ConsumerDirect proxy running on port ${PORT}`);
-});
+http
+  .createServer((req, res) => {
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(
+      JSON.stringify({
+        status: "ok",
+        hasClientId,
+        hasClientSecret,
+        hasBaseUrl,
+        hasInternalSecret,
+      })
+    );
+  })
+  .listen(PORT, () => {
+    console.log(`✅ ConsumerDirect proxy running on port ${PORT}`);
+  });
 
 // ------------------------------
 // EXPORT (FOR FUTURE USE)
